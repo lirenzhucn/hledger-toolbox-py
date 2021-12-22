@@ -83,7 +83,7 @@ def _transaction_builder(
 
 
 def _extract_dividends_interests(
-    stmt_text: Iterable[str], acorns_account: str
+    stmt_text: Iterable[str], acorns_account: str, dividend_account: str
 ) -> List[utils.Transaction]:
     SEC_START_KWD = "purchases and sales summary"
     SEC_END_KWD = "net purchases and sales"
@@ -99,7 +99,7 @@ def _extract_dividends_interests(
                 postings=[
                     utils.Posting(account=f"{acorns_account}:cash", amount=amount),
                     utils.Posting(
-                        account=f"revenues:investment:dividends:{ticker.lower()}",
+                        account=f"{dividend_account}:{ticker.lower()}",
                         amount=-amount,
                     ),
                 ],
@@ -283,8 +283,35 @@ def _write_journal_file(
     default="assets:transfer",
     help="hledger account name for the transfer holding",
 )
+@click.option(
+    "-d",
+    "--dividend-account",
+    type=str,
+    default="revenues:investment:dividends",
+    help="hledger account name for dividend revenues",
+)
+@click.option(
+    "-s",
+    "--short-term-account",
+    type=str,
+    default="revenues:investment:realized short term gain",
+    help="hledger account name for short-term gain revenues",
+)
+@click.option(
+    "-l",
+    "--long-term-account",
+    type=str,
+    default="revenues:investment:realized long term gain",
+    help="hledger account name for long-term gain revenues",
+)
 def acorns_import(
-    input_file: str, output_file: str, account: str, transfer_account: str
+    input_file: str,
+    output_file: str,
+    account: str,
+    transfer_account: str,
+    dividend_account: str,
+    short_term_account: str,
+    long_term_account: str,
 ):
     """
     Import Acorns pdf statements (INPUT_FILE) into hledger friendly csv files
@@ -293,7 +320,9 @@ def acorns_import(
     stmt_text = utils.get_raw_text_of_pdf(input_file).split("\n")
     stmt_period = _extract_statement_period(stmt_text)
     transfers = _extract_transfers(stmt_text, account, transfer_account)
-    transactions_dividend = _extract_dividends_interests(stmt_text, account)
+    transactions_dividend = _extract_dividends_interests(
+        stmt_text, account, dividend_account
+    )
     transactions_buy = _extract_transactions(
         stmt_text, "securities bought", "total securities bought", account
     )
@@ -302,14 +331,14 @@ def acorns_import(
         "realized gains & losses for this period: short-term",
         "total short-term gain (loss)",
         account,
-        "revenues:investment:realized short term gain",
+        short_term_account,
     )
     transactions_sell_long = _extract_realized_gains_losses(
         stmt_text,
         "realized gains & losses for this period: long-term",
         "total long-term gain (loss)",
         account,
-        "revenues:investment:realized long term gain",
+        long_term_account,
     )
     _write_journal_file(
         output_file,
