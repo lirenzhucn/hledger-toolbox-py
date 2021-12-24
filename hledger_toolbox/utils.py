@@ -1,5 +1,5 @@
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import decimal
 import enum
@@ -7,7 +7,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(os.path.basename(__file__))
 
@@ -68,6 +68,7 @@ class Posting:
     amount: Optional[Amount] = None
     price: Optional[Price] = None
     spacing: int = 6
+    tags: List[Tuple[str, str]] = field(default_factory=list)
 
     def __str__(self) -> str:
         res = self.account
@@ -75,6 +76,8 @@ class Posting:
             res += " " * self.spacing + str(self.amount)
         if self.price is not None:
             res += " " + str(self.price)
+        if self.tags:
+            res += "  " + ", ".join(f"{key}: {val}" for key, val in self.tags)
         return res
 
 
@@ -85,6 +88,7 @@ class Transaction:
     postings: List[Posting]
     cleared: bool = True
     indent: int = 4
+    tags: List[Tuple[str, str]] = field(default_factory=list)
 
     def _set_spacings(self):
         longest_account = max(len(posting.account) for posting in self.postings)
@@ -97,6 +101,8 @@ class Transaction:
             f"{self.date.strftime('%Y-%m-%d')} "
             f"{'* ' if self.cleared else ''}{self.description}"
         )
+        if self.tags:
+            res += "  ; " + ", ".join(f"{key}: {val}" for key, val in self.tags)
         for posting in self.postings:
             res += "\n"
             res += " " * self.indent + str(posting)
