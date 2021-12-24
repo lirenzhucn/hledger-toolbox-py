@@ -1,3 +1,4 @@
+import bisect
 import csv
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -7,7 +8,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from typing import List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 logger = logging.getLogger(os.path.basename(__file__))
 
@@ -153,6 +154,12 @@ class CommodityLot:
     quantity: decimal.Decimal
     price: Price
 
+    def __lt__(self, other: "CommodityLot") -> bool:
+        return self.date < other.date
+
+    def __le__(self, other: "CommodityLot") -> bool:
+        return self.date <= other.date
+
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}({self.date.strftime('%Y-%m-%d')} "
@@ -166,7 +173,7 @@ def get_commodity_lots(
     *,
     hledger_bin: str = "hledger",
     hledger_file: Optional[str] = None,
-):
+) -> List[CommodityLot]:
     """Get the date, quantity, and price
 
     Parameters
@@ -186,7 +193,7 @@ def get_commodity_lots(
     List[CommodityLot]
         A list of commodity lots
     """
-    commodity_account = f"{base_account}:{commodity_symbol.lower()}"
+    commodity_account = f"{base_account}:{commodity_symbol.lower()}:"
     cmd_commodity = [hledger_bin]
     if hledger_file is not None:
         cmd_commodity += ["-f", hledger_file]
@@ -207,9 +214,7 @@ def get_commodity_lots(
     for row_commodity, row_cost_basis in zip(
         csv_reader_commodity, csv_reader_cost_basis
     ):
-        date = datetime.strptime(
-            row_commodity[0][len(commodity_account) + 1 :], "%Y%m%d"
-        )
+        date = datetime.strptime(row_commodity[0][len(commodity_account) :], "%Y%m%d")
         quantity = decimal.Decimal(
             row_commodity[1].strip()[: -len(commodity_symbol)].strip()
         )
@@ -230,4 +235,75 @@ def get_commodity_lots(
                 price=unit_price,
             )
         )
+    res.sort()
     return res
+
+
+class CommodityLotsManager:
+    def __init__(self) -> None:
+        self._lots: Dict[str, List[CommodityLot]] = {}
+
+    def _update_lots(self, commodity: str, base_account: str):
+        if f"{base_account}:{commodity}" not in self._lots:
+            self._lots[f"{base_account}:{commodity}"] = get_commodity_lots(
+                base_account, commodity
+            )
+
+    def get_lot(
+        self, commodity: str, base_account: str, lot_date: datetime
+    ) -> Optional[CommodityLot]:
+        self._update_lots(commodity, base_account)
+        lots = self._lots.get(f"{base_account}:{commodity}", [])
+        ind = bisect.bisect_left(
+            lots,
+            CommodityLot(
+                date=lot_date,
+                commodity=commodity,
+                quantity=decimal.Decimal(0),
+                price=None,
+            ),
+        )
+        if 0 <= ind < len(lots) and lots[ind].date == lot_date:
+            return lots[ind]
+        else:
+            return None
+
+    def get_lots(self, commodity: str, base_account: str) -> Iterable[CommodityLot]:
+        self._update_lots(commodity, base_account)
+        return self._lots.get(f"{base_account}:{commodity}", [])
+
+    def add_lot(
+        self,
+        commodity: str,
+        base_account: str,
+        date: datetime,
+        quantity: decimal.Decimal,
+        price: Price,
+    ):
+        self._update_lots(commodity, base_account)
+        bisect.insort(
+            self._lots[f"{base_account}:{commodity}"],
+            CommodityLot(
+                date=date, commodity=commodity, quantity=quantity, price=price
+            ),
+        )
+
+    def sell_from_lot(
+        self,
+        commodity: str,
+        base_account: str,
+        date: datetime,
+        quantity: decimal.Decimal,
+    ):
+        lot = self.get_lot(commodity, base_account, date)
+        if lot is None:
+            raise ValueError(
+                f"unable to find the specified lot {date.strftime('%Y%m%d')}"
+            )
+        if lot.quantity < quantity:
+            raise ValueError(
+                "not enough quantity in lot "
+                f"{base_account}:{commodity}:{date.strftime('%Y%m%d')}: "
+                f"requested {quantity:.6f}; have {lot.quantity:.6f}"
+            )
+        lot.quantity -= quantity
