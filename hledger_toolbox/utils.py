@@ -1,14 +1,14 @@
 import bisect
 import csv
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 import decimal
 import enum
 import logging
 import os
 import subprocess
 import tempfile
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 logger = logging.getLogger(os.path.basename(__file__))
 
@@ -36,7 +36,7 @@ class Amount:
         if negative:
             decimal_value = -decimal_value
         return cls(
-            commodity="$", value=decimal_value, formatter="{commodity:s}{value:.2f}"
+            commodity="$", value=decimal_value, formatter="{commodity:s}{value:.6f}"
         )
 
     @classmethod
@@ -44,7 +44,7 @@ class Amount:
         return cls(
             commodity="$",
             value=decimal.Decimal(value),
-            formatter="{commodity:s}{value:.2f}",
+            formatter="{commodity:s}{value:.6f}",
         )
 
 
@@ -153,6 +153,20 @@ class CommodityLot:
     commodity: str
     quantity: decimal.Decimal
     price: Price
+
+    @property
+    def unit_price(self) -> Price:
+        if self.price.price_type == PriceType.UNIT:
+            return self.price
+        else:
+            return Price(
+                price_type=PriceType.UNIT,
+                amount=Amount(
+                    commodity=self.price.amount.commodity,
+                    formatter=self.price.amount.formatter,
+                    value=self.price.amount.value / self.quantity,
+                ),
+            )
 
     def __lt__(self, other: "CommodityLot") -> bool:
         return self.date < other.date
@@ -268,7 +282,7 @@ class CommodityLotsManager:
         else:
             return None
 
-    def get_lots(self, commodity: str, base_account: str) -> Iterable[CommodityLot]:
+    def get_lots(self, commodity: str, base_account: str) -> List[CommodityLot]:
         self._update_lots(commodity, base_account)
         return self._lots.get(f"{base_account}:{commodity}", [])
 
@@ -307,3 +321,199 @@ class CommodityLotsManager:
                 f"requested {quantity:.6f}; have {lot.quantity:.6f}"
             )
         lot.quantity -= quantity
+
+
+class _OptionsSymbolMapper:
+    _inst: Optional["_OptionsSymbolMapper"] = None
+
+    def __getitem__(self, key: int) -> int:
+        if key >= ord("0") and key <= ord("9"):
+            return key - ord("0") + ord("a")
+        elif key == ord("."):
+            return ord("_")
+        else:
+            return key
+
+    @classmethod
+    def inst(cls) -> "_OptionsSymbolMapper":
+        if cls._inst is None:
+            cls._inst = _OptionsSymbolMapper()
+        return cls._inst
+
+
+def map_options_commodity_symbol(with_numbers: str) -> str:
+    return with_numbers.strip().strip("-+").translate(_OptionsSymbolMapper.inst())
+
+
+@dataclass
+class TradeLotsAccounts:
+    base_account: str
+    short_term_account: str
+    long_term_account: str
+
+
+def _trade_to_close_postings(
+    accounts: TradeLotsAccounts,
+    date: datetime,
+    commodity: str,
+    unit_price: decimal.Decimal,
+    change_in_quantity: Iterable[decimal.Decimal],
+    lots: Iterable[CommodityLot],
+    lots_manager: CommodityLotsManager,
+) -> List[Posting]:
+    res = []
+    long_term_gain_loss = decimal.Decimal(0)
+    short_term_gain_loss = decimal.Decimal(0)
+    for change, lot in zip(change_in_quantity, lots):
+        lot_date_str = lot.date.strftime("%Y%m%d")
+        if abs(lot.quantity) < abs(change):
+            raise ValueError(
+                f"lot {accounts.base_account}:{commodity.lower()}:{lot_date_str}"
+                " does not have enough quantity: "
+                f"requested: {change:.6f}; has {lot.quantity:.6f}"
+            )
+        if date - lot.date >= timedelta(days=365):
+            long_term_gain_loss += change * (unit_price - lot.unit_price.amount.value)
+        else:
+            short_term_gain_loss += change * (unit_price - lot.unit_price.amount.value)
+        res.append(
+            Posting(
+                account=f"{accounts.base_account}:{commodity.lower()}:{lot_date_str}",
+                amount=Amount(
+                    commodity=map_options_commodity_symbol(commodity),
+                    formatter="{value:.6f} {commodity:s}",
+                    value=change,
+                ),
+                price=lot.unit_price,
+            )
+        )
+        lots_manager.sell_from_lot(commodity, accounts.base_account, lot.date, -change)
+    if long_term_gain_loss != 0:
+        res.append(
+            Posting(
+                account=accounts.long_term_account,
+                amount=Amount.dollar_amount(long_term_gain_loss),
+            )
+        )
+    if short_term_gain_loss != 0:
+        res.append(
+            Posting(
+                account=accounts.short_term_account,
+                amount=Amount.dollar_amount(short_term_gain_loss),
+            )
+        )
+    return res
+
+
+def trade_lots(
+    lots_manager: CommodityLotsManager,
+    accounts: TradeLotsAccounts,
+    date: datetime,
+    commodity: str,
+    change_in_quantity: Union[
+        decimal.Decimal, Iterable[Tuple[decimal.Decimal, datetime]]
+    ],
+    proceeds_or_costs: decimal.Decimal,
+) -> Transaction:
+    """Generate a lots-aware transaction that reflects one commodity trade
+
+    Parameters
+    ----------
+    lots_manager: CommodityLotsManager
+        a CommodityLotsManager object that maintains lots info
+    accounts: TradeLotsAccounts
+        which accounts to post to for various purposes
+    date: datetime.datetime
+        the date of the trade
+    commodity: str
+        the commodity symbol *before* mapping
+    change_in_quantity: Union[
+        decimal.Decimal, Iterable[Tuple[decimal.Decimal, datetime]]
+    ]
+        change of commodity quantity; either one number or a list of tuples with
+        numbers and lot dates
+    proceeds_or_costs: decimal.Decimal
+        proceeds or costs of the trade
+
+    Returns
+    -------
+    Transaction
+        a `Transaction` object with appropriate postings
+    """
+    postings = [
+        Posting(
+            account=f"{accounts.base_account}:cash",
+            amount=Amount.dollar_amount(proceeds_or_costs),
+        )
+    ]
+    if isinstance(change_in_quantity, decimal.Decimal):
+        lots = lots_manager.get_lots(commodity, accounts.base_account)
+        unit_price = abs(proceeds_or_costs / change_in_quantity)
+        if not lots or lots[0].quantity * change_in_quantity >= 0:
+            # this is a opening trade
+            price = Price(
+                price_type=PriceType.UNIT, amount=Amount.dollar_amount(unit_price)
+            )
+            postings.append(
+                Posting(
+                    account=f"{accounts.base_account}:{commodity.lower()}:"
+                    + date.strftime("%Y%m%d"),
+                    amount=Amount(
+                        commodity=map_options_commodity_symbol(commodity),
+                        formatter="{value:.6f} {commodity:s}",
+                        value=change_in_quantity,
+                    ),
+                    price=price,
+                )
+            )
+            lots_manager.add_lot(
+                commodity, accounts.base_account, date, change_in_quantity, price
+            )
+        else:
+            # this is a FIFO closing trade
+            used_changes = []
+            used_lots = []
+            i = 0
+            remainder = change_in_quantity
+            while remainder * change_in_quantity > 0 and i < len(lots):
+                if lots[i].quantity == 0:
+                    continue
+                used_changes.append(
+                    -lots[i].quantity
+                    if abs(remainder) > abs(lots[i].quantity)
+                    else remainder
+                )
+                used_lots.append(lots[i])
+                remainder += lots[i].quantity
+                i += 1
+            postings.extend(
+                _trade_to_close_postings(
+                    accounts,
+                    date,
+                    commodity,
+                    unit_price,
+                    used_changes,
+                    used_lots,
+                    lots_manager,
+                )
+            )
+    else:
+        # change_in_quantity is an iterable with specific lots...
+        # must be a closing trade!
+        total_quantity = sum(q for q, _ in change_in_quantity)
+        unit_price = abs(proceeds_or_costs / total_quantity)
+        postings.extend(
+            _trade_to_close_postings(
+                accounts,
+                date,
+                commodity,
+                unit_price,
+                [q for q, _ in change_in_quantity],
+                [
+                    lots_manager.get_lot(commodity, accounts.base_account, d)
+                    for _, d in change_in_quantity
+                ],
+                lots_manager,
+            )
+        )
+    return Transaction(date=date, description="", postings=postings)
