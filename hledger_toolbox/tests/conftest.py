@@ -15,12 +15,10 @@ def sample_journal(tmp_path: pathlib.Path) -> pathlib.Path:
     assets:broker:amat:20200904       3 AMAT @ $61.33
     assets:broker:amat:20200909      10 AMAT @ $56.61
     assets:broker:amat:20201208      0.160 AMAT @@ $14.30
-    assets:broker:amat210219p75      -100 AMATcbacbkPif @@ $164.30
     assets:broker:gild:20200622      20 GILD @@ $1512.20
     assets:broker:gild:20200706      12 GILD @@ $928.68
     assets:broker:gild:20200904       8 GILD @@ $529.24
     assets:broker:gild:20201016      60 GILD @ $62.22
-    assets:broker:gild210115c70      -100 GILDcbabbfCia @@ $21.30
     assets:broker:msft:20191115      238 MSFT @ $148.06
     assets:broker:msft:20200305      35.204 MSFT @@ $6004.08  ; espp:
     assets:broker:msft:20200515      72 MSFT @ $180.53
@@ -32,11 +30,13 @@ def sample_journal(tmp_path: pathlib.Path) -> pathlib.Path:
     assets:broker:selb:20200422      100 SELB @ $2.74
     assets:broker:selb:20200904      300 SELB @ $2.18
     assets:broker:selb:20201001      666 SELB @ $1.50
-    assets:broker:msft210108c250:20201125     -100 MSFTcbabaiCcfa @@ $98.62  ; acquired on 2020-11-25
-    assets:broker:msft210129c255:20201221     -100 MSFTcbabcjCcff @@ $99.30  ; acquired on 2020-12-21
-    assets:broker:selb210115c5:20201125       -300 SELBcbabbfCf @@ $87.93    ; acquired on 2020-11-25
-    assets:broker:selb210219c5:20201222       -700 SELBcbacbjCf @@ $92.19    ; acquired on 2020-12-22
-    assets:broker:selb210319c5:20201222       -500 SELBcbadbjCf @@ $171.56   ; acquired on 2020-12-22
+    assets:broker:amat210219p75:20201229      -1 AMATcbacbjPhf @@ $164.30
+    assets:broker:gild210115c70:20201130      -1 GILDcbabbfCha @@ $21.30
+    assets:broker:msft210108c250:20201125     -1 MSFTcbabaiCcfa @@ $98.62  ; acquired on 2020-11-25
+    assets:broker:msft210129c255:20201221     -1 MSFTcbabcjCcff @@ $99.30  ; acquired on 2020-12-21
+    assets:broker:selb210115c5:20201125       -3 SELBcbabbfCf @@ $87.93    ; acquired on 2020-11-25
+    assets:broker:selb210219c5:20201222       -7 SELBcbacbjCf @@ $92.19    ; acquired on 2020-12-22
+    assets:broker:selb210319c5:20201222       -5 SELBcbadbjCf @@ $171.56   ; acquired on 2020-12-22
     assets:broker:cash               $11895.03
     equity:starting balance
     """

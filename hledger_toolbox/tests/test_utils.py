@@ -82,7 +82,7 @@ def test_trade_lots_short_open(lots_manager: utils.CommodityLotsManager):
         ),
         date=trade_date,
         commodity="MSFT210515C400",
-        change_in_quantity=decimal.Decimal(-100),
+        change_in_quantity=decimal.Decimal(-1),
         proceeds_or_costs=decimal.Decimal(180),
     )
     assert actual.date == trade_date
@@ -94,10 +94,10 @@ def test_trade_lots_short_open(lots_manager: utils.CommodityLotsManager):
     assert (
         actual.postings[1].account
         == f"assets:broker:msft210515c400:{trade_date.strftime('%Y%m%d')}"
-        and actual.postings[1].amount.value == -100
+        and actual.postings[1].amount.value == -1
         and actual.postings[1].amount.commodity == "MSFTcbafbfCeaa"
         and actual.postings[1].price.price_type == utils.PriceType.UNIT
-        and actual.postings[1].price.amount.value == decimal.Decimal("1.8")
+        and actual.postings[1].price.amount.value == decimal.Decimal("180")
     )
 
 
@@ -197,7 +197,7 @@ def test_trade_lots_short_close(lots_manager: utils.CommodityLotsManager):
         ),
         date=trade_date,
         commodity="MSFT210129C255",
-        change_in_quantity=decimal.Decimal(100),
+        change_in_quantity=decimal.Decimal(1),
         proceeds_or_costs=decimal.Decimal(0),
     )
     actual_lots = lots_manager.get_lots("MSFT210129C255", "assets:broker")
@@ -210,9 +210,9 @@ def test_trade_lots_short_close(lots_manager: utils.CommodityLotsManager):
     )
     assert (
         actual.postings[1].account == "assets:broker:msft210129c255:20201221"
-        and actual.postings[1].amount.value == 100
+        and actual.postings[1].amount.value == 1
         and actual.postings[1].price.price_type == utils.PriceType.UNIT
-        and actual.postings[1].price.amount.value == decimal.Decimal("0.993")
+        and actual.postings[1].price.amount.value == decimal.Decimal("99.3")
     )
     assert (
         actual.postings[2].account == "revenues:investment:short_term"
