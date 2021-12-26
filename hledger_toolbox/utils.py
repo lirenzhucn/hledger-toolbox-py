@@ -517,3 +517,30 @@ def trade_lots(
             )
         )
     return Transaction(date=date, description="", postings=postings)
+
+
+def balance_transaction(
+    transaction: Transaction, account: str, *, hledger_bin: str = "hledger"
+) -> None:
+    """In-place modify `transaction` to make its postings balance if necessary
+
+    Parameters
+    ----------
+    transaction: Transaction
+        the Transaction object to balance
+    account: str
+        name of the account to be added for balancing
+    """
+    journal_text = str(transaction) + "\n"
+    proc = subprocess.Popen(
+        [hledger_bin, "-f-", "print"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout, stderr = proc.communicate(journal_text.encode())
+    if proc.returncode != 0 and (
+        "could not balance" in stdout.decode().lower()
+        or "could not balance" in stderr.decode().lower()
+    ):
+        transaction.postings.append(Posting(account=account))
