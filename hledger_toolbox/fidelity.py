@@ -419,7 +419,7 @@ def fidelity_import(
         output_fp = open(output_file, "w")
     utils.write_journal_file(
         output_fp,
-        [("All Transactions"), transactions],
+        [("All Transactions", transactions)],
         (min(t.date for t in transactions), max(t.date for t in transactions)),
     )
 

@@ -39,7 +39,7 @@ def lots_manager(
 
 def test_get_lots(lots_manager: utils.CommodityLotsManager):
     lots = lots_manager.get_lots("MSFT", "assets:broker")
-    assert len(lots) == 7
+    assert len(lots) == 3
 
 
 def test_trade_lots_long_open(lots_manager: utils.CommodityLotsManager):
