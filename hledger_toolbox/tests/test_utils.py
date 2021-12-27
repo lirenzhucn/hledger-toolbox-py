@@ -185,6 +185,49 @@ def test_trade_lots_long_close_fifo(lots_manager: utils.CommodityLotsManager):
         and "{:.2f}".format(actual.postings[4].amount.value) == "369.29"
     )
 
+def test_trade_lots_long_close_fifo_average(lots_manager: utils.CommodityLotsManager):
+    trade_date = datetime.strptime("2021-01-31", "%Y-%m-%d")
+    actual = utils.trade_lots(
+        lots_manager,
+        utils.TradeLotsAccounts(
+            base_account="assets:broker",
+            short_term_account="revenues:investment:short_term",
+            long_term_account="revenues:investment:long_term",
+        ),
+        date=trade_date,
+        commodity="MSFT",
+        change_in_quantity=decimal.Decimal(-35 - 238),
+        proceeds_or_costs=decimal.Decimal(160 * (35 + 238)),
+        use_average_cost=True,
+    )
+    actual_lots = lots_manager.get_lots("MSFT", "assets:broker")
+    assert actual_lots[0].quantity == decimal.Decimal("0") and actual_lots[
+        1
+    ].quantity == decimal.Decimal("0.204")
+    assert actual.date == trade_date
+    assert len(actual.postings) == 5
+    assert actual.postings[0].account == "assets:broker:cash" and actual.postings[
+        0
+    ].amount.value == 160 * (35 + 238)
+    assert (
+        actual.postings[1].account == f"assets:broker:msft:20191115"
+        and actual.postings[1].amount.value == -238
+    )
+    assert (
+        actual.postings[2].account == f"assets:broker:msft:20200305"
+        and actual.postings[2].amount.value == -35
+    )
+    # NOTE: realized gains are different from the simple FIFO case
+    # the average cost of the three MSFT lots is $163.40
+    assert (
+        actual.postings[3].account == f"revenues:investment:long_term"
+        and "{:.2f}".format(actual.postings[3].amount.value) == "809.11"
+    )
+    assert (
+        actual.postings[4].account == f"revenues:investment:short_term"
+        and "{:.2f}".format(actual.postings[4].amount.value) == "118.99"
+    )
+
 
 def test_trade_lots_short_close(lots_manager: utils.CommodityLotsManager):
     trade_date = datetime.strptime("2021-01-29", "%Y-%m-%d")

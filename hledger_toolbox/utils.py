@@ -1,6 +1,6 @@
 import bisect
 import csv
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import decimal
 import enum
@@ -360,12 +360,21 @@ def _trade_to_close_postings(
     change_in_quantity: Iterable[decimal.Decimal],
     lots: Iterable[CommodityLot],
     lots_manager: CommodityLotsManager,
+    *,
+    average_unit_cost: Optional[decimal.Decimal] = None,
 ) -> List[Posting]:
     res = []
     long_term_gain_loss = decimal.Decimal(0)
     short_term_gain_loss = decimal.Decimal(0)
     for change, lot in zip(change_in_quantity, lots):
         lot_date_str = lot.date.strftime("%Y%m%d")
+        # NOTE: use average unit cost if provided; otherwise use actual lot cost
+        lot_cost = (
+            average_unit_cost
+            if average_unit_cost is not None
+            else lot.unit_price.amount.value
+        )
+        lot_price = replace(lot.price, amount=replace(lot.price.amount, value=lot_cost))
         if abs(lot.quantity) < abs(change):
             raise ValueError(
                 f"lot {accounts.base_account}:{commodity.lower()}:{lot_date_str}"
@@ -373,9 +382,9 @@ def _trade_to_close_postings(
                 f"requested: {change:.6f}; has {lot.quantity:.6f}"
             )
         if date - lot.date >= timedelta(days=365):
-            long_term_gain_loss += change * (unit_price - lot.unit_price.amount.value)
+            long_term_gain_loss += change * (unit_price - lot_cost)
         else:
-            short_term_gain_loss += change * (unit_price - lot.unit_price.amount.value)
+            short_term_gain_loss += change * (unit_price - lot_cost)
         res.append(
             Posting(
                 account=f"{accounts.base_account}:{commodity.lower()}:{lot_date_str}",
@@ -384,7 +393,7 @@ def _trade_to_close_postings(
                     formatter="{value:.6f} {commodity:s}",
                     value=change,
                 ),
-                price=lot.unit_price,
+                price=lot_price,
             )
         )
         lots_manager.sell_from_lot(commodity, accounts.base_account, lot.date, -change)
@@ -414,6 +423,8 @@ def trade_lots(
         decimal.Decimal, Iterable[Tuple[decimal.Decimal, datetime]]
     ],
     proceeds_or_costs: decimal.Decimal,
+    *,
+    use_average_cost: bool = False,
 ) -> Transaction:
     """Generate a lots-aware transaction that reflects one commodity trade
 
@@ -434,6 +445,9 @@ def trade_lots(
         numbers and lot dates
     proceeds_or_costs: decimal.Decimal
         proceeds or costs of the trade
+    use_average_cost: bool (keyword only, default False)
+        if set to True, we use the average cost over all remaining lots for
+        closing trades
 
     Returns
     -------
@@ -486,6 +500,13 @@ def trade_lots(
                 used_lots.append(lots[i])
                 remainder += lots[i].quantity
                 i += 1
+            average_unit_cost = None
+            if use_average_cost:
+                total_quantity = sum(lot.quantity for lot in lots)
+                average_unit_cost = sum(
+                    lot.quantity * lot.price.amount.value / total_quantity
+                    for lot in lots
+                )
             postings.extend(
                 _trade_to_close_postings(
                     accounts,
@@ -495,6 +516,7 @@ def trade_lots(
                     used_changes,
                     used_lots,
                     lots_manager,
+                    average_unit_cost=average_unit_cost,
                 )
             )
     else:
