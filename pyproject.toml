@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hledger-toolbox"
-version = "0.1.0.1"
+version = "0.1.0.2"
 description = "Tools to simplify the use of hledger"
 authors = ["Liren Zhu <liren.zhu.cn@gmail.com>"]
 
