@@ -12,6 +12,7 @@ from hledger_toolbox.fidelity import fidelity_import
 def sample_fidelity_csv(tmp_path: pathlib.Path) -> pathlib.Path:
     sample_file = tmp_path / "sample.csv"
     sample_text = """
+ 03/15/2021, YOU SOLD FIDELITY CALIFORNIA MUNICIPAL INCOME (FCTFX) (Cash), FCTFX, FIDELITY CALIFORNIA MUNICIPAL INCOME,Cash,-10,15.00,,,,150,03/16/2021,
  03/08/2021, REVERSE SPLIT R/S FROM 517103404#REOR M0051311040001 LARGO RESOURCES LTD COM NPV (POST REV S (517103602) (Cash), LGO, LARGO RESOURCES LTD COM NPV (POST REV S,Cash,130,,,,,,,
  03/08/2021, REVERSE SPLIT R/S TO 517103602#REOR M0051311040000 LARGO RESOURCES COM NPV ISIN CA51710340 (517103404) (Cash), LGO, LARGO RESOURCES COM NPV ISIN CA51710340,Cash,-1300,,,,,,,
  02/22/2021, YOU BOUGHT CLOSING TRANSACTION CALL (MSFT) MICROSOFT CORP FEB 26 21 $250 (100 SHS) (Cash), -MSFT210226C250, CALL (MSFT) MICROSOFT CORP FEB 26 21 $250 (100 SHS),Cash,1,0.1,,0.04,,-10.04,02/23/2021,
@@ -62,8 +63,8 @@ def test_import_end_to_end(
     ), "hledger parsing of the resulting journal failed"
     expected_hledger_output = '''
 "account","balance"
-"assets:broker:cash","$14229.930000"
-"assets:broker:fctfx:20210106","37.147000 FCTFX"
+"assets:broker:cash","$14379.930000"
+"assets:broker:fctfx:20210106","27.147000 FCTFX"
 "assets:broker:fctfx:20210129","1.811000 FCTFX"
 "assets:broker:lgo:20210112","90.000000 LGO"
 "assets:broker:lgo:20210121","30.000000 LGO"
@@ -74,12 +75,12 @@ def test_import_end_to_end(
 "assets:broker:msft210129c255:20201221","-1 MSFTcbabcjCcff"
 "assets:transfer","$-4531.270000"
 "equity:starting balance","$-66796.110000"
-"expenses:investment:trading fees","$0.000037"
+"expenses:investment:trading fees","$0.000040"
 "revenues:investment:dividends:fctfx","$-24.470000"
 "revenues:investment:dividends:spaxx","$-0.100000"
 "revenues:investment:realized long term gain","$-1019.020000"
-"revenues:investment:realized short term gain","$-190.070000"
-"total","$-58331.109963, 38.958000 FCTFX, 120.000000 LGO, 340.831000 MSFT, -1 MSFTcbabcjCcff"
+"revenues:investment:realized short term gain","$-205.445533"
+"total","$-58196.485493, 28.958000 FCTFX, 120.000000 LGO, 340.831000 MSFT, -1 MSFTcbabcjCcff"
     '''.strip()
     actual_hledger_output = hledger_proc.stdout.decode().strip()
     assert actual_hledger_output == expected_hledger_output, "hledger output does not match"
@@ -94,8 +95,8 @@ def test_import_end_to_end(
     ), "hledger parsing of the resulting journal failed"
     expected_hledger_output = '''
 "account","balance"
-"assets:broker:cash","$14229.930000"
-"assets:broker:fctfx:20210106","$499.999994"
+"assets:broker:cash","$14379.930000"
+"assets:broker:fctfx:20210106","$365.375524"
 "assets:broker:fctfx:20210129","$24.470000"
 "assets:broker:lgo:20210112","$1047.709980"
 "assets:broker:lgo:20210121","$480.000000"
@@ -106,11 +107,11 @@ def test_import_end_to_end(
 "assets:broker:msft210129c255:20201221","$-99.300000"
 "assets:transfer","$-4531.270000"
 "equity:starting balance","$-66796.110000"
-"expenses:investment:trading fees","$0.000037"
+"expenses:investment:trading fees","$0.000040"
 "revenues:investment:dividends:fctfx","$-24.470000"
 "revenues:investment:dividends:spaxx","$-0.100000"
 "revenues:investment:realized long term gain","$-1019.020000"
-"revenues:investment:realized short term gain","$-190.070000"
+"revenues:investment:realized short term gain","$-205.445533"
 "total","0"
     '''.strip()
     actual_hledger_output = hledger_proc.stdout.decode().strip()

@@ -502,6 +502,7 @@ def trade_lots(
                 i += 1
             average_unit_cost = None
             if use_average_cost:
+                logger.info("using average cost basis for FIFO commodity %s", commodity)
                 total_quantity = sum(lot.quantity for lot in lots)
                 average_unit_cost = sum(
                     lot.quantity * lot.price.amount.value / total_quantity

@@ -26,6 +26,9 @@ class RowParserConfig:
     short_term_account: str
     long_term_account: str
     trade_fees_account: str
+    average_cost_commodity_patterns: List[re.Pattern] = dataclasses.field(
+        default_factory=list
+    )
     cash_commodity: List[str] = dataclasses.field(default_factory=lambda: ["SPAXX"])
 
 
@@ -114,6 +117,11 @@ def _trade_action_parser(
         commodity=commodity,
         change_in_quantity=change_in_quantity,
         proceeds_or_costs=total_dollars,
+        # If the commodity symbol matches any pattern provided
+        use_average_cost=any(
+            p.match(commodity) is not None
+            for p in config.average_cost_commodity_patterns
+        ),
     )
     transaction.description = row["action"].strip()
     transaction.tags = tags
@@ -354,6 +362,14 @@ def _row_parser(
     default="expenses:investment:trading fees",
     help="hledger account name for trading fees",
 )
+@click.option(
+    "-A",
+    "--use-average-cost-on",
+    multiple=True,
+    default=[r"^F[A-Z]{3}X$", r"^OPCAX$"],
+    help="list all regexes matching commodities that use the average cost "
+    "basis method (usually mutual funds)",
+)
 def fidelity_import(
     input_file: str,
     output_file: str,
@@ -364,11 +380,13 @@ def fidelity_import(
     short_term_account: str,
     long_term_account: str,
     trade_fees_account: str,
+    use_average_cost_on: List[str],
 ):
     """
     Import Fidelity csv statements (INPUT_FILE) into hledger friendly journal
     files (OUTPUT_FILE)
     """
+    average_cost_commodity_patterns = [re.compile(s) for s in use_average_cost_on]
     valid_line_regex = re.compile(r"^\s*\d{2}/\d{2}/\d{4}")
     with open(input_file, "r") as input_fp:
         lines = [
@@ -407,6 +425,7 @@ def fidelity_import(
         short_term_account=short_term_account,
         long_term_account=long_term_account,
         trade_fees_account=trade_fees_account,
+        average_cost_commodity_patterns=average_cost_commodity_patterns,
     )
     transactions = [
         item
@@ -425,4 +444,10 @@ def fidelity_import(
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s: %(message)s", level=logging.INFO
+    )
+    logger.setLevel(logging.INFO)
+    utils.logger.setLevel(logging.INFO)
+
     fidelity_import()
