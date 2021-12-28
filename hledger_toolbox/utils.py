@@ -212,10 +212,10 @@ def get_commodity_lots(
     if hledger_file is not None:
         cmd_commodity += ["-f", hledger_file]
     cmd_commodity += ["bal", commodity_account, "-O", "csv"]
-    logger.info("hledger command to run: %s", " ".join(cmd_commodity))
+    logger.debug("hledger command to run: %s", " ".join(cmd_commodity))
     process_commodity = subprocess.run(cmd_commodity, check=True, capture_output=True)
     cmd_cost_basis = cmd_commodity + ["-B"]
-    logger.info("hledger command to run: %s", " ".join(cmd_cost_basis))
+    logger.debug("hledger command to run: %s", " ".join(cmd_cost_basis))
     process_cost_basis = subprocess.run(cmd_cost_basis, check=True, capture_output=True)
     # remove the first line (title) and the last line (total)
     csv_reader_commodity = list(
