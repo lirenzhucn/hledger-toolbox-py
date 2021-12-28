@@ -187,6 +187,7 @@ def get_commodity_lots(
     *,
     hledger_bin: str = "hledger",
     hledger_file: Optional[str] = None,
+    end_date: Optional[datetime] = None,
 ) -> List[CommodityLot]:
     """Get the date, quantity, and price
 
@@ -201,6 +202,8 @@ def get_commodity_lots(
     hledger_file: str | None (optional, keyword only)
         path to the hledger journal file; default is None and will use the one
         in $LEDGER_FILE environment variable
+    end_date: datetime | None (optional, keyword only)
+        if not None, hledger bal will be run with an end date
 
     Returns
     -------
@@ -212,6 +215,8 @@ def get_commodity_lots(
     if hledger_file is not None:
         cmd_commodity += ["-f", hledger_file]
     cmd_commodity += ["bal", commodity_account, "-O", "csv"]
+    if end_date is not None:
+        cmd_commodity += ["-e", end_date.strftime("%Y-%m-%d")]
     logger.debug("hledger command to run: %s", " ".join(cmd_commodity))
     process_commodity = subprocess.run(cmd_commodity, check=True, capture_output=True)
     cmd_cost_basis = cmd_commodity + ["-B"]
@@ -256,11 +261,20 @@ def get_commodity_lots(
 class CommodityLotsManager:
     def __init__(self) -> None:
         self._lots: Dict[str, List[CommodityLot]] = {}
+        self._end_date: Optional[datetime] = None
+
+    @property
+    def end_date(self) -> Optional[datetime]:
+        return self._end_date
+
+    @end_date.setter
+    def end_date(self, new_end_date: Optional[datetime]) -> None:
+        self._end_date = new_end_date
 
     def _update_lots(self, commodity: str, base_account: str):
         if f"{base_account}:{commodity}" not in self._lots:
             self._lots[f"{base_account}:{commodity}"] = get_commodity_lots(
-                base_account, commodity
+                base_account, commodity, end_date=self.end_date
             )
 
     def get_lot(

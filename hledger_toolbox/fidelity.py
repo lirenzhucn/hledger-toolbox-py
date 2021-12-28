@@ -469,6 +469,9 @@ def fidelity_import(
     rows = sorted(
         csv_reader, key=lambda r: datetime.strptime(r["date"].strip(), "%m/%d/%Y")
     )
+    # get the first transaction date
+    first_date = datetime.strptime(rows[0]["date"].strip(), "%m/%d/%Y")
+    LOTS_MANAGER.end_date = first_date
     _SplitParser.inst().lots_manager = LOTS_MANAGER
     _SplitParser.inst().base_account = account
     row_parser_config = RowParserConfig(
