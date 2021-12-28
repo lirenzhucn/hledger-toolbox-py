@@ -12,6 +12,7 @@ from hledger_toolbox.fidelity import fidelity_import
 def sample_fidelity_csv(tmp_path: pathlib.Path) -> pathlib.Path:
     sample_file = tmp_path / "sample.csv"
     sample_text = """
+ 04/09/2021, LONG-TERM CAP GAIN FIDELITY CALIFORNIA MUNICIPAL INCOME (FCTFX) (Cash), FCTFX, FIDELITY CALIFORNIA MUNICIPAL INCOME,Cash,,,,,,10,,
  03/15/2021, YOU SOLD FIDELITY CALIFORNIA MUNICIPAL INCOME (FCTFX) (Cash), FCTFX, FIDELITY CALIFORNIA MUNICIPAL INCOME,Cash,-10,15.00,,,,150,03/16/2021,
  03/08/2021, REVERSE SPLIT R/S FROM 517103404#REOR M0051311040001 LARGO RESOURCES LTD COM NPV (POST REV S (517103602) (Cash), LGO, LARGO RESOURCES LTD COM NPV (POST REV S,Cash,130,,,,,,,
  03/08/2021, REVERSE SPLIT R/S TO 517103602#REOR M0051311040000 LARGO RESOURCES COM NPV ISIN CA51710340 (517103404) (Cash), LGO, LARGO RESOURCES COM NPV ISIN CA51710340,Cash,-1300,,,,,,,
@@ -63,7 +64,7 @@ def test_import_end_to_end(
     ), "hledger parsing of the resulting journal failed"
     expected_hledger_output = '''
 "account","balance"
-"assets:broker:cash","$14379.930000"
+"assets:broker:cash","$14389.930000"
 "assets:broker:fctfx:20210106","27.147000 FCTFX"
 "assets:broker:fctfx:20210129","1.811000 FCTFX"
 "assets:broker:lgo:20210112","90.000000 LGO"
@@ -78,7 +79,7 @@ def test_import_end_to_end(
 "expenses:investment:trading fees","$0.000040"
 "revenues:investment:dividends:fctfx","$-24.470000"
 "revenues:investment:dividends:spaxx","$-0.100000"
-"revenues:investment:realized long term gain","$-1019.020000"
+"revenues:investment:realized long term gain","$-1029.020000"
 "revenues:investment:realized short term gain","$-205.445533"
 "total","$-58196.485493, 28.958000 FCTFX, 120.000000 LGO, 340.831000 MSFT, -1 MSFTcbabcjCcff"
     '''.strip()
@@ -95,7 +96,7 @@ def test_import_end_to_end(
     ), "hledger parsing of the resulting journal failed"
     expected_hledger_output = '''
 "account","balance"
-"assets:broker:cash","$14379.930000"
+"assets:broker:cash","$14389.930000"
 "assets:broker:fctfx:20210106","$365.375524"
 "assets:broker:fctfx:20210129","$24.470000"
 "assets:broker:lgo:20210112","$1047.709980"
@@ -110,7 +111,7 @@ def test_import_end_to_end(
 "expenses:investment:trading fees","$0.000040"
 "revenues:investment:dividends:fctfx","$-24.470000"
 "revenues:investment:dividends:spaxx","$-0.100000"
-"revenues:investment:realized long term gain","$-1019.020000"
+"revenues:investment:realized long term gain","$-1029.020000"
 "revenues:investment:realized short term gain","$-205.445533"
 "total","0"
     '''.strip()

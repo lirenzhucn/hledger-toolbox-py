@@ -158,6 +158,32 @@ def _dividend_action_parser(
     )
 
 
+def _capital_gain_action_parser(
+    row: Dict[str, str], config: RowParserConfig
+) -> Optional[utils.Transaction]:
+    date = datetime.strptime(row["date"].strip(), "%m/%d/%Y")
+    total_dollars = decimal.Decimal(row["amount"].strip())
+    gain_account = (
+        config.long_term_account
+        if row["action"].strip().lower().startswith("long-term")
+        else config.short_term_account
+    )
+    return utils.Transaction(
+        date=date,
+        description=row["action"].strip(),
+        postings=[
+            utils.Posting(
+                account=gain_account,
+                amount=utils.Amount.dollar_amount(-total_dollars),
+            ),
+            utils.Posting(
+                account=f"{config.base_account}:cash",
+                amount=utils.Amount.dollar_amount(total_dollars),
+            ),
+        ],
+    )
+
+
 class _SplitParser:
     _inst: Optional["_SplitParser"] = None
 
@@ -297,6 +323,7 @@ ACTION_PARSER_MAP: List[
         _expired_option_action_parser,
     ),
     (re.compile(r"^\s*reverse split .*$", re.IGNORECASE), _SplitParser.inst()),
+    (re.compile(r"^\s*(long|short)-term cap gain .*$", re.IGNORECASE), _capital_gain_action_parser),
 ]
 
 
