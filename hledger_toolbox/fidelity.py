@@ -323,7 +323,10 @@ ACTION_PARSER_MAP: List[
         _expired_option_action_parser,
     ),
     (re.compile(r"^\s*reverse split .*$", re.IGNORECASE), _SplitParser.inst()),
-    (re.compile(r"^\s*(long|short)-term cap gain .*$", re.IGNORECASE), _capital_gain_action_parser),
+    (
+        re.compile(r"^\s*(long|short)-term cap gain .*$", re.IGNORECASE),
+        _capital_gain_action_parser,
+    ),
 ]
 
 
@@ -397,6 +400,9 @@ def _row_parser(
     help="list all regexes matching commodities that use the average cost "
     "basis method (usually mutual funds)",
 )
+@click.option(
+    "--beta", is_flag=True, help="whether the csv file is exported from a beta UI"
+)
 def fidelity_import(
     input_file: str,
     output_file: str,
@@ -408,6 +414,7 @@ def fidelity_import(
     long_term_account: str,
     trade_fees_account: str,
     use_average_cost_on: List[str],
+    beta: bool = False,
 ):
     """
     Import Fidelity csv statements (INPUT_FILE) into hledger friendly journal
@@ -421,9 +428,29 @@ def fidelity_import(
             for line in input_fp.readlines()
             if valid_line_regex.search(line) is not None
         ]
-    csv_reader = csv.DictReader(
-        lines,
-        [
+    csv_headers = []
+    if beta:
+        csv_headers = [
+            "date",
+            "action",
+            "symbol",
+            "desc",
+            "type",
+            "exchange_quantity",
+            "exchange_currency",
+            "quantity",
+            "currency",
+            "price",
+            "exchange_rate",
+            "commission",
+            "fees",
+            "interest",
+            "amount",
+            "settlement_date",
+            "acquired_date",
+        ]
+    else:
+        csv_headers = [
             "date",
             "action",
             "symbol",
@@ -437,8 +464,8 @@ def fidelity_import(
             "amount",
             "settlement_date",
             "acquired_date",
-        ],
-    )
+        ]
+    csv_reader = csv.DictReader(lines, csv_headers)
     rows = sorted(
         csv_reader, key=lambda r: datetime.strptime(r["date"].strip(), "%m/%d/%Y")
     )
