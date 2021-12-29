@@ -602,3 +602,106 @@ def write_journal_file(
             output_file.write(str(transaction))
             output_file.write("\n")
             output_file.write("\n")
+
+
+@dataclass
+class CommoditySplitAction:
+    date: datetime
+    commodity: str
+    quantity: decimal.Decimal
+    is_reverse: bool = False
+
+
+class SplitParser:
+    def __init__(self, lots_manager: Optional[CommodityLotsManager] = None) -> None:
+        self._lots_manager = lots_manager
+        self._cache: Dict[
+            str, Tuple[List[CommodityLot], decimal.Decimal, decimal.Decimal]
+        ] = {}
+
+    @property
+    def lots_manager(self) -> CommodityLotsManager:
+        return self._lots_manager
+
+    @lots_manager.setter
+    def lots_manager(self, lots_manager: CommodityLotsManager):
+        self._lots_manager = lots_manager
+
+    def __call__(
+        self, record: CommoditySplitAction, base_account: str, trade_fees_account: str
+    ) -> Optional[Transaction]:
+        if self._lots_manager is None:
+            raise ValueError("parser not initialized")
+        if record.commodity in self._cache:
+            lots = self._cache[record.commodity][0]
+            total_quantity = sum(lot.quantity for lot in lots)
+            if record.quantity * total_quantity <= 0:
+                # the "sell" half of the split
+                self._cache[record.commodity] = (
+                    lots,
+                    record.quantity,
+                    self._cache[record.commodity][2],
+                )
+            else:
+                self._cache[record.commodity] = (
+                    lots,
+                    self._cache[record.commodity][1],
+                    record.quantity,
+                )
+            if record.is_reverse:
+                desc = f"Reverse split {record.commodity}"
+            else:
+                desc = f"Split {record.commodity}"
+            sell_quantity, buy_quantity = self._cache[record.commodity][1:]
+            ratio = -sell_quantity / buy_quantity
+            postings: List[Posting] = []
+            for lot in lots:
+                lot_account = (
+                    f"{base_account}:{record.commodity.lower()}:"
+                    f"{lot.date.strftime('%Y%m%d')}"
+                )
+                postings.append(
+                    Posting(
+                        account=lot_account,
+                        amount=Amount(
+                            commodity=lot.commodity,
+                            formatter="{value:.6f} {commodity:s}",
+                            value=-lot.quantity,
+                        ),
+                        price=lot.price,
+                    )
+                )
+                new_price = replace(lot.price)
+                new_price.amount = replace(lot.price.amount)
+                new_price.amount.value *= ratio
+                postings.append(
+                    Posting(
+                        account=lot_account,
+                        amount=Amount(
+                            commodity=lot.commodity,
+                            formatter="{value:.6f} {commodity:s}",
+                            value=lot.quantity / ratio,
+                        ),
+                        price=new_price,
+                    )
+                )
+            transaction = Transaction(
+                date=record.date,
+                description=desc,
+                postings=postings,
+                tags=[("split", "")],
+            )
+            balance_transaction(transaction, account=trade_fees_account)
+            return transaction
+        else:
+            lots = self._lots_manager.get_lots(record.commodity, base_account)
+            total_quantity = sum(lot.quantity for lot in lots)
+            if record.quantity * total_quantity <= 0:
+                # the "sell" half of the split
+                sell_quantity = record.quantity
+                buy_quantity = None
+            else:
+                buy_quantity = record.quantity
+                sell_quantity = None
+            self._cache[record.commodity] = (lots, sell_quantity, buy_quantity)
+            return None

@@ -188,104 +188,28 @@ class _SplitParser:
     _inst: Optional["_SplitParser"] = None
 
     def __init__(
-        self,
-        lots_manager: Optional[utils.CommodityLotsManager] = None,
-        base_account: str = "",
+        self, lots_manager: Optional[utils.CommodityLotsManager] = None
     ) -> None:
-        self._lots_manager = lots_manager
-        self._base_account = base_account
-        self._cache: Dict[
-            str, Tuple[List[utils.CommodityLot], decimal.Decimal, decimal.Decimal]
-        ] = {}
+        self._parser = utils.SplitParser(lots_manager)
 
     @property
     def lots_manager(self) -> utils.CommodityLotsManager:
-        return self._lots_manager
+        return self._parser.lots_manager
 
     @lots_manager.setter
     def lots_manager(self, lots_manager: utils.CommodityLotsManager):
-        self._lots_manager = lots_manager
-
-    @property
-    def base_account(self) -> str:
-        return self._base_account
-
-    @base_account.setter
-    def base_account(self, base_account: str):
-        self._base_account = base_account
+        self._parser.lots_manager = lots_manager
 
     def __call__(
         self, row: Dict[str, str], config: RowParserConfig
     ) -> Optional[utils.Transaction]:
-        if self._lots_manager is None or not self._base_account:
-            raise ValueError("parser not initialized")
-        date = datetime.strptime(row["date"].strip(), "%m/%d/%Y")
-        commodity = row["symbol"].strip()
-        quantity = decimal.Decimal(row["quantity"].strip())
-        if commodity in self._cache:
-            lots = self._cache[commodity][0]
-            total_quantity = sum(lot.quantity for lot in lots)
-            if quantity * total_quantity <= 0:
-                # the "sell" half of the split
-                # self._cache[commodity][1] = quantity
-                self._cache[commodity] = (lots, quantity, self._cache[commodity][2])
-            else:
-                # self._cache[commodity][2] = quantity
-                self._cache[commodity] = (lots, self._cache[commodity][1], quantity)
-            if row["action"].strip().lower().startswith("reverse"):
-                desc = f"Reverse split {commodity}"
-            else:
-                desc = f"Split {commodity}"
-            sell_quantity, buy_quantity = self._cache[commodity][1:]
-            ratio = -sell_quantity / buy_quantity
-            postings: List[utils.Posting] = []
-            for lot in lots:
-                lot_account = (
-                    f"{config.base_account}:{commodity.lower()}:"
-                    f"{lot.date.strftime('%Y%m%d')}"
-                )
-                postings.append(
-                    utils.Posting(
-                        account=lot_account,
-                        amount=utils.Amount(
-                            commodity=lot.commodity,
-                            formatter="{value:.6f} {commodity:s}",
-                            value=-lot.quantity,
-                        ),
-                        price=lot.price,
-                    )
-                )
-                new_price = dataclasses.replace(lot.price)
-                new_price.amount = dataclasses.replace(lot.price.amount)
-                new_price.amount.value *= ratio
-                postings.append(
-                    utils.Posting(
-                        account=lot_account,
-                        amount=utils.Amount(
-                            commodity=lot.commodity,
-                            formatter="{value:.6f} {commodity:s}",
-                            value=lot.quantity / ratio,
-                        ),
-                        price=new_price,
-                    )
-                )
-            transaction = utils.Transaction(
-                date=date, description=desc, postings=postings, tags=[("split", "")]
-            )
-            utils.balance_transaction(transaction, account=config.trade_fees_account)
-            return transaction
-        else:
-            lots = self._lots_manager.get_lots(commodity, self._base_account)
-            total_quantity = sum(lot.quantity for lot in lots)
-            if quantity * total_quantity <= 0:
-                # the "sell" half of the split
-                sell_quantity = quantity
-                buy_quantity = None
-            else:
-                buy_quantity = quantity
-                sell_quantity = None
-            self._cache[commodity] = (lots, sell_quantity, buy_quantity)
-            return None
+        record = utils.CommoditySplitAction(
+            date=datetime.strptime(row["date"].strip(), "%m/%d/%Y"),
+            commodity=row["symbol"].strip(),
+            quantity=decimal.Decimal(row["quantity"].strip()),
+            is_reverse=row["action"].strip().lower().startswith("reverse"),
+        )
+        return self._parser(record, config.base_account, config.trade_fees_account)
 
     @classmethod
     def inst(cls) -> "_SplitParser":
@@ -473,7 +397,6 @@ def fidelity_import(
     first_date = datetime.strptime(rows[0]["date"].strip(), "%m/%d/%Y")
     LOTS_MANAGER.end_date = first_date
     _SplitParser.inst().lots_manager = LOTS_MANAGER
-    _SplitParser.inst().base_account = account
     row_parser_config = RowParserConfig(
         base_account=account,
         transfer_account=transfer_account,
