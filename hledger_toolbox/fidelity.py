@@ -420,6 +420,7 @@ def fidelity_import(
         output_fp,
         [("All Transactions", transactions)],
         (min(t.date for t in transactions), max(t.date for t in transactions)),
+        generator_name="Fidelity import utility"
     )
 
 
