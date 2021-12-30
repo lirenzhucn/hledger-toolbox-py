@@ -322,7 +322,7 @@ class RowParser:
             for i, field in enumerate(self.FIELDS):
                 self._rulers[field] = (last_pos, last_pos + len(mat.group(i + 1)))
                 last_pos += len(mat.group(i + 1))
-            self._rulers[self.FIELDS[-1]] = (self._rulers[self.FIELDS[-1]][0], -1)
+            self._rulers[self.FIELDS[-1]] = (self._rulers[self.FIELDS[-1]][0], None)
             return True
         return False
 
