@@ -375,6 +375,7 @@ def _trade_to_close_postings(
     lots: Iterable[CommodityLot],
     lots_manager: CommodityLotsManager,
     *,
+    quantity_precision: int = 6,
     average_unit_cost: Optional[decimal.Decimal] = None,
 ) -> List[Posting]:
     res = []
@@ -404,7 +405,7 @@ def _trade_to_close_postings(
                 account=f"{accounts.base_account}:{commodity.lower()}:{lot_date_str}",
                 amount=Amount(
                     commodity=map_options_commodity_symbol(commodity),
-                    formatter="{value:.6f} {commodity:s}",
+                    formatter="{value:.%df} {commodity:s}" % quantity_precision,
                     value=change,
                 ),
                 price=lot_price,
@@ -438,6 +439,7 @@ def trade_lots(
     ],
     proceeds_or_costs: decimal.Decimal,
     *,
+    quantity_precision: int = 6,
     use_average_cost: bool = False,
 ) -> Transaction:
     """Generate a lots-aware transaction that reflects one commodity trade
@@ -459,6 +461,8 @@ def trade_lots(
         numbers and lot dates
     proceeds_or_costs: decimal.Decimal
         proceeds or costs of the trade
+    quantity_precision: int (keyword only, default 6)
+        decimal precision for quantity formatting.
     use_average_cost: bool (keyword only, default False)
         if set to True, we use the average cost over all remaining lots for
         closing trades
@@ -488,7 +492,7 @@ def trade_lots(
                     + date.strftime("%Y%m%d"),
                     amount=Amount(
                         commodity=map_options_commodity_symbol(commodity),
-                        formatter="{value:.6f} {commodity:s}",
+                        formatter="{value:.%df} {commodity:s}" % quantity_precision,
                         value=change_in_quantity,
                     ),
                     price=price,

@@ -152,6 +152,7 @@ def _trade_transformer(
         commodity=commodity,
         change_in_quantity=total_quantity,
         proceeds_or_costs=record.amount,
+        quantity_precision=max(6, -total_quantity.as_tuple().exponent)
     )
     transaction.description = (
         f"{record.transaction} on {record.description} ({commodity})"
