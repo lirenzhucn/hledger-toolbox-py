@@ -66,6 +66,12 @@ class RecordRow(pydantic.BaseModel):
         else:
             return v
 
+    @pydantic.validator("qty", pre=True)
+    def qty_may_contain_S(cls, v: Any) -> decimal.Decimal:
+        if isinstance(v, str) and v.endswith("S"):
+            return -decimal.Decimal(v[:-1])
+        return decimal.Decimal(v)
+
     @pydantic.validator("price", pre=True)
     def price_dollar_amount(cls, v: Any) -> decimal.Decimal:
         return _dollar_amount_validator(v)
@@ -80,8 +86,8 @@ class RecordRow(pydantic.BaseModel):
 
 
 OPTIONS_DESC_PAT = re.compile(
-    r"^(?P<underlying>[a-z]+)\s*"
-    r"(?P<date>\d{2}/\d{2}/\d{4})\s*"
+    r"^(\s*|option expiration for )(?P<underlying>[a-z]+)\s*"
+    r"(?P<date>\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2})\s*"
     r"(?P<type>call|put)\s*"
     r"\$(?P<strike>[\d\.,]+)"
     r"$",
@@ -93,7 +99,10 @@ def _make_options_symbol(description: str) -> str:
     mat = OPTIONS_DESC_PAT.match(description.strip())
     if mat is None:
         raise ValueError(f"invalid options description: {description}")
-    date = datetime.datetime.strptime(mat.group("date"), "%m/%d/%Y")
+    date_str = mat.group("date")
+    date = datetime.datetime.strptime(
+        date_str, "%m/%d/%Y" if "/" in date_str else "%Y-%m-%d"
+    )
     type_code = mat.group("type")[0].upper()
     normalized = decimal.Decimal(mat.group("strike")).normalize()
     _, _, exponent = normalized.as_tuple()
@@ -211,7 +220,9 @@ class _SplitTransformer:
             quantity=record.qty,
             is_reverse=record.transaction == "SPR",
         )
-        return True, self._parser(record, config.base_account, config.trade_fees_account)
+        return True, self._parser(
+            record, config.base_account, config.trade_fees_account
+        )
 
     @classmethod
     def inst(cls) -> "_SplitTransformer":
@@ -483,7 +494,7 @@ def robinhood_import(
         output_fp,
         [("All Transactions", transactions)],
         (min(t.date for t in transactions), max(t.date for t in transactions)),
-        generator_name="Robinhood import utility"
+        generator_name="Robinhood import utility",
     )
 
 
